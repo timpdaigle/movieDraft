@@ -43,23 +43,24 @@ def render_content(tab):
 				dcc.Dropdown(
 					id='year-dropdown',
 					options=[{'label': str(year), 'value': str(year)} for year in yearVals],
-					value=str(max(yearVals))
+					value=str(max(yearVals)),
+					style={'width': 300}
 			    )
 			]),
 			html.Div([
 				html.Div([
 					html.H3('Summary Table'),
-					dcc.Graph(id='aggTable', style={'height':400})
+					dcc.Graph(id='aggTable', style={'height':355})
 				], className='six columns'),
 				html.Div([
 					html.H3('Stacked Actuals'),
-					dcc.Graph(id='graph-with-slider2', style={'height':400, 'border': '1px solid #333'})	
+					dcc.Graph(id='graph-with-slider2', style={'height':375, 'border': '1px solid #333'})	
 				], className='six columns')
 			], className='row'),
 
 			html.Div([
 				html.H3('Cumulative Spliced'),
-				dcc.Graph(id='graph-with-slider1', style={'height':400, 'border': '1px solid #333'})
+				dcc.Graph(id='graph-with-slider1', style={'height':375, 'border': '1px solid #333'})
 			])
 		])
 	elif tab == 'multiYr':
@@ -71,17 +72,19 @@ def render_content(tab):
 					id='year-multichoice',
 					options=[{'label': str(year), 'value': str(year)} for year in yearVals],
 					value=[max(yearVals)],
-					multi=True
+					multi=True,
+					style={'width': 300}
 				)
 			]),
 
 			html.Div([
 				html.Div([
-					html.H3('Space Holder')
+					html.H3('Overall Pick Distribution'),
+					dcc.Graph(id='scatterPick', style={'height':375, 'border': '1px solid #333'})
 				], className='six columns'),
 				html.Div([
 					html.H3('Round Pick Distribution'),
-					dcc.Graph(id='boxWhisk', style={'height':400})
+					dcc.Graph(id='boxWhisk', style={'height':375, 'border': '1px solid #333'})
 				], className='six columns')
 			], className='row')
 		])
@@ -125,7 +128,7 @@ def update_figure_1(selected_year):
 		vLine=list()
 	cumeLayout= go.Layout(legend=dict(x=0, y=1),
 		shapes= vLine,
-		margin={'t':25, 'b':20})
+		margin={'t':25, 'b':20, 'r': 5, 'l': 30})
 	return {
 		'data': cumeData, 
 		'layout': cumeLayout
@@ -172,13 +175,13 @@ def update_box_whisk(selectedYrs):
 
 	for i in combDict.keys():
 	    tempInp = go.Box(y=combDict[i], 
-	        name='Round '+str(i), 
+	        name='RD '+str(i), 
 	        boxpoints = 'all',
 	        marker=dict(size=5), 
 	        line=dict(width=2))
 	    boxWhisk.append(tempInp) 
 	boxWhiskLayout = go.Layout(showlegend=False,
-		margin={'t':10, 'b':25, 'l':35})
+		margin={'t':10, 'b':25, 'l':35, 'r':20})
 	#boxWhiskFig = go.Figure(data=boxWhisk, layout=boxWhiskLayout)
 	return {
 		'data': boxWhisk,
@@ -203,15 +206,51 @@ def get_agg_table(selected_year):
 	tableInp.reset_index(level=0, inplace=True)
 	tableInp.sort_values(by='Actual', inplace=True, ascending=False)
 	idDict = {'index' : 'Participant', 
-	    'Actual' : 'Actual, Mil.$', 
-	    'total' : 'Spliced, Mil.$',
-	    'observed' : 'Picks Observed'}
+	    'Actual' : 'Actual, MM', 
+	    'total' : 'Spliced, MM',
+	    'observed' : 'Picks Obs.'}
 	tableInp.columns=[idDict.get(x, x) for x in tableInp.columns]
 	rows = tableInp.shape[0]+1
-	hCon = 375.0/rows
+	hCon = 350.0/rows
 	fullTable = ff.create_table(tableInp, height_constant=hCon)
-	return fullTable
+	aggTabLayout = go.Layout(height=375)
+	return {
+		'data': fullTable,
+		'layout': aggTabLayout
+	}
 
+@app.callback(
+	dash.dependencies.Output('scatterPick', 'figure'),
+	[dash.dependencies.Input('year-multichoice', 'value')])
+def scatter_plot(selectedYrs):
+	if selectedYrs == None:
+		return
+	scatterDict = dict()
+	for i in selectedYrs:
+		scatterData = cF.getFields(['overallPick','actual','title'],
+		    draft,int(i))
+		#sort dataframe by overall pick
+		scatterData = scatterData.sort_values(by=['overallPick'])
+		#scatter actual vs projections vs fitted over overall pick
+		scatterDict[i] = go.Scatter(x=scatterData['overallPick'], 
+		    y=scatterData['actual'],
+		    mode='markers',
+		    marker=dict(size='10',
+		        opacity=0.5),
+		    name=i,
+		    text= scatterData['title'])
+	scatterList = list(scatterDict.values())
+	scatterLayout= go.Layout(
+	    xaxis= dict(
+	        #title= 'Overall Pick',
+	        ticklen= 5,
+	        zeroline= False,
+	        gridwidth= 2),
+	    margin={'t':10, 'b':35, 'l':35, 'r':20})
+	return {
+		'data': scatterList,
+		'layout': scatterLayout
+	}
 
 if __name__ == '__main__':
 	#application.run_server(debug=True)
