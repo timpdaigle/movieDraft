@@ -2,6 +2,7 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_table as dt
 from dash.dependencies import Input, Output
 import pandas as pd
 # import draftFunctions as dF
@@ -15,7 +16,17 @@ import chartFunctions as cF
 draft = cF.loadResults(nameF='BoxOfficeDraft')
 boxDict = cF.loadResults(nameF='Head2Head')
 yearVals = list(draft.keys())
-
+aggTabCols = [{'name':'Player', 'id':'Player'},
+	    {'name':'Actual', 'id':'Actual'},
+	    {'name':'Spliced', 'id':'Spliced'},
+	    {'name':'Picks Obs.', 'id':'Picks Obs.'}]
+schedTabCols = [{'name': 'Date','id': 'Date'},
+	{'name':'Title', 'id':'Title'},
+	{'name': 'Act.','id': 'Act.'},
+	{'name': 'Proj.','id': 'Proj.'},
+	{'name': 'Player','id': 'Player'},
+	{'name': 'Pick','id': 'Pick'}
+]
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
@@ -23,7 +34,7 @@ app.config['suppress_callback_exceptions']=True
 application = app.server
 app.title = 'Movie Draft Tracking and Results'
 app.layout = html.Div([
-	html.H1('Movie Draft Tracking and Results'),
+	html.H1('Movie Draft Tracking and Results', style={'text-align':'center'}),
 	dcc.Tabs(id='draftTabs', value='singleYr', children=[
 		dcc.Tab(label='Single Year Analysis', value='singleYr'),
 		dcc.Tab(label='Multiple Year Analysis', value='multiYr')
@@ -37,7 +48,7 @@ def render_content(tab):
 	if tab == 'singleYr':
 		return html.Div([
 			html.Div([
-				html.H2('Single Year Analysis'),
+				#html.H2('Single Year Analysis'),
 				html.Label('Choose Draft Year: '),
 				dcc.Dropdown(
 					id='year-dropdown',
@@ -47,25 +58,89 @@ def render_content(tab):
 			    )
 			]),
 			html.Div([
+				html.Div([html.H5('Aggregate Results'),
+				dt.DataTable(id='aggTable', 
+					columns=aggTabCols, 
+					data='aggTabRows',
+					style_table={
+				        'height': '180px',
+				        'overflowY': 'scroll',
+				        'border': 'thin lightgrey solid'
+				    },
+				    style_cell={
+				    	'textAlign':'center',
+				    	'width': '150px'
+				    },
+				    style_cell_conditional=[
+				        {
+				            'if': {'column_id': 'Player'},
+				            'textAlign': 'left',
+				            'width': '150px'
+				        }
+				    ]+[
+				        {
+				            'if': {'row_index': 'odd'},
+				            'backgroundColor': 'rgb(248, 248, 248)'
+				        }
+				    ],
+				    style_header={
+				        'fontWeight': 'bold'
+				    },
+				    sorting=True,
+        			sorting_type="multi",
+        			# n_fixed_rows=1
+			    ),
+			    html.H5('Release Schedule'),
+			    dt.DataTable(id='schedTable', 
+					columns=schedTabCols, 
+					data='schedTable',
+					style_table={
+				        'height': '180px',
+				        'overflowY': 'scroll',
+				        'border': 'thin lightgrey solid'
+				    },
+				    style_cell={
+				    	'textAlign':'center',
+				    	'textOverflow': 'ellipsis'
+				    },
+				    style_cell_conditional=[
+				        {
+				            'if': {'column_id': c},
+				            'textAlign': 'left',
+				            'whiteSpace': 'no-wrap',
+				            'overflow': 'hidden',
+				            'maxWidth': '0px',
+				            'maxWidth': '125px',
+				            'textOverflow': 'ellipsis'
+				        } for c in ['Player', 'Title']
+				    ]+[
+				        {
+				            'if': {'row_index': 'odd'},
+				            'backgroundColor': 'rgb(248, 248, 248)'
+				        }
+				    ],
+				    style_header={
+				        'fontWeight': 'bold'
+				    },
+				    sorting=True,
+        			sorting_type="multi",
+				)
+				],className='six columns'),
 				html.Div([
-					html.H3('Summary Table'),
-					dcc.Graph(id='aggTable', style={'height':355})
-				], className='six columns'),
-				html.Div([
-					html.H3('Stacked Actuals'),
-					dcc.Graph(id='graph-with-slider2', style={'height':375, 'border': '1px solid #333'})	
+					html.H5('Stacked Actuals'),
+					dcc.Graph(id='graph-with-slider2', style={'height':400, 'border': '2px solid #D3D3D3'})	
 				], className='six columns')
 			], className='row'),
 
 			html.Div([
-				html.H3('Cumulative Spliced'),
-				dcc.Graph(id='graph-with-slider1', style={'height':375, 'border': '1px solid #333'})
+				html.H5('Cumulative Spliced'),
+				dcc.Graph(id='graph-with-slider1', style={'height':375, 'border': '2px solid #D3D3D3'})
 			])
 		])
 	elif tab == 'multiYr':
 		return html.Div([
 			html.Div([
-				html.H2('Multiple Year Analysis'),
+				#html.H2('Multiple Year Analysis'),
 				html.Label('Choose Draft Year(s): '),
 				dcc.Dropdown(
 					id='year-multichoice',
@@ -78,12 +153,12 @@ def render_content(tab):
 
 			html.Div([
 				html.Div([
-					html.H3('Overall Pick Distribution'),
-					dcc.Graph(id='scatterPick', style={'height':375, 'border': '1px solid #333'})
+					html.H5('Overall Pick Distribution'),
+					dcc.Graph(id='scatterPick', style={'height':375, 'border': '2px solid #D3D3D3'})
 				], className='six columns'),
 				html.Div([
-					html.H3('Round Pick Distribution'),
-					dcc.Graph(id='boxWhisk', style={'height':375, 'border': '1px solid #333'})
+					html.H5('Round Pick Distribution'),
+					dcc.Graph(id='boxWhisk', style={'height':375, 'border': '2px solid #D3D3D3'})
 				], className='six columns')
 			], className='row')
 		])
@@ -188,7 +263,7 @@ def update_box_whisk(selectedYrs):
 	}
 
 @app.callback(
-	dash.dependencies.Output('aggTable', 'figure'),
+	dash.dependencies.Output('aggTable', 'data'),
 	[dash.dependencies.Input('year-dropdown', 'value')])
 def get_agg_table(selected_year):
 	yr = int(selected_year)
@@ -204,19 +279,36 @@ def get_agg_table(selected_year):
 	tableInp['observed'] = tableInp['observed'].astype(int)
 	tableInp.reset_index(level=0, inplace=True)
 	tableInp.sort_values(by='Actual', inplace=True, ascending=False)
-	idDict = {'index' : 'Participant', 
-	    'Actual' : 'Actual, MM', 
-	    'total' : 'Spliced, MM',
+	idDict = {'index' : 'Player', 
+	    'Actual' : 'Actual', 
+	    'total' : 'Spliced',
 	    'observed' : 'Picks Obs.'}
 	tableInp.columns=[idDict.get(x, x) for x in tableInp.columns]
-	rows = tableInp.shape[0]+1
-	hCon = 350.0/rows
-	fullTable = ff.create_table(tableInp, height_constant=hCon)
-	aggTabLayout = go.Layout(height=375)
-	return {
-		'data': fullTable,
-		'layout': aggTabLayout
+	return tableInp.to_dict("rows")
+
+@app.callback(
+	dash.dependencies.Output('schedTable', 'data'),
+	[dash.dependencies.Input('year-dropdown', 'value')])
+def get_sched_table(selected_year):
+	yr = int(selected_year)
+	pdSched = cF.getFields(['releaseDate','title','act','bop','al','tim','id','overallPick'],boxDict,yr)
+	pdSched['expert']=pdSched[['tim','al']].mean(axis=1)
+	pdSched['Proj.']=pdSched['bop']
+	pdSched.loc[np.isnan(pdSched['Proj.']), 'Proj.']=pdSched['expert']
+	pdSched['Pick']=pd.to_numeric(pdSched['overallPick'], errors='coerce')
+	trimmed=pdSched.dropna(subset=['Pick'])
+	trimmed['Date']=pd.to_datetime(trimmed['releaseDate'])
+	sched = trimmed[['Date','title', 'act','Proj.','id','Pick']]
+	nameDict = {
+	 	'act': 'Act.',
+	 	'title':'Title',
+	 	'id': 'Player',
 	}
+	sched.rename(index=str, columns=nameDict, inplace=True)
+	sched['Act.']=sched['Act.']/1000000
+	sched = sched.round({'Act.':2})
+	sched['Proj.']=sched['Proj.']/1000000
+	return sched.to_dict("rows")
 
 @app.callback(
 	dash.dependencies.Output('scatterPick', 'figure'),
