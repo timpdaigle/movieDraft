@@ -11,11 +11,38 @@ import plotly.graph_objs as go
 import plotly.figure_factory as ff
 import numpy as np
 import datetime
+import statsmodels.api as sm
 import chartFunctions as cF
+import os
 
 draft = cF.loadResults(nameF='BoxOfficeDraft')
 boxDict = cF.loadResults(nameF='Head2Head')
 yearVals = list(draft.keys())
+
+modelDataDict = dict()
+for i in yearVals:
+    modelDataDict[i] = cF.getFields(['overallPick','actual','title', 'round'],
+        draft,i)
+    modelDataDict[i]['Year']=i
+modelData=pd.concat(modelDataDict.values())
+#add a constant to the variable list
+modelData = sm.add_constant(modelData, prepend=False)
+glmLog = sm.GLM(modelData['actual'], 
+    modelData[['overallPick', 'const']], 
+    family=sm.families.Gaussian(sm.families.links.log))  
+reloadEst = sm.load(os.path.join('data','logModelFull.p'))
+logParams = reloadEst.params
+modelData['Model'] = glmLog.predict(logParams, 
+    modelData[['overallPick', 'const']])
+modelData = modelData.sort_values(by=['overallPick','Year'])
+modelData['actual']=modelData['actual']/1_000_000
+modelData['Model']=modelData['Model']/1_000_000
+modelData['Resid']=modelData['actual']-modelData['Model']
+modelData['% Resid']=modelData['Resid']/modelData['Model']*100
+modelData = modelData.round({'actual':2, 'Model':2, 'Resid':2, '% Resid':2})
+# modelSlim = modelData[['title','round','overallPick','Resid','% Resid','Act.','Model']]
+# ['title','round','overallPick','Resid','% Resid','Act.','Model']
+
 aggTabCols = [{'name':'Player', 'id':'Player'},
 	    {'name':'Actual', 'id':'Actual'},
 	    {'name':'Spliced', 'id':'Spliced'},
@@ -27,6 +54,7 @@ schedTabCols = [{'name': 'Date','id': 'Date'},
 	{'name': 'Player','id': 'Player'},
 	{'name': 'Pick','id': 'Pick'}
 ]
+residCols = ['Title','Year','Rd','Pick','Resid','% Resid','Act.']
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
@@ -160,7 +188,53 @@ def render_content(tab):
 					html.H5('Round Pick Distribution'),
 					dcc.Graph(id='boxWhisk', style={'height':375, 'border': '2px solid #D3D3D3'})
 				], className='six columns')
-			], className='row')
+			], className='row'),
+			html.Div([
+				html.H5('Residual Analysis'),
+				html.Div([html.Div([dt.DataTable(
+					id='residTable',
+					columns=[
+						{"name":i,"id":i} for i in residCols
+					],
+					data='residRows',
+					sorting='be',
+					sorting_type='multi',
+					sorting_settings=[],
+					row_selectable="multi",
+					selected_rows=[],
+					pagination_mode='be',
+					pagination_settings={
+						"current_page":0,
+						"page_size":15
+					},
+					style_cell={
+				    	'textAlign':'center',
+				    	'textOverflow': 'ellipsis'
+				    },
+				    style_cell_conditional=[
+				        {
+				            'if': {'column_id': c},
+				            'textAlign': 'left',
+				            'whiteSpace': 'no-wrap',
+				            'overflow': 'hidden',
+				            'maxWidth': '0px',
+				            'maxWidth': '125px',
+				            'textOverflow': 'ellipsis'
+				        } for c in ['Player', 'Title']
+				    ]+[
+				        {
+				            'if': {'row_index': 'odd'},
+				            'backgroundColor': 'rgb(248, 248, 248)'
+				        }
+				    ],
+				    style_header={
+				        'fontWeight': 'bold'
+				    },
+					navigation="page"
+				)], className='six columns'), 
+				html.Div(id='residChartContainer', className='six columns', style={'border': '2px solid #D3D3D3'})], className='row'),
+				
+			])
 		])
 
 @app.callback(
@@ -261,6 +335,84 @@ def update_box_whisk(selectedYrs):
 		'data': boxWhisk,
 		'layout': boxWhiskLayout
 	}
+
+@app.callback(
+	dash.dependencies.Output('residTable', 'data'),
+	[dash.dependencies.Input('year-multichoice', 'value'),
+	Input('residTable',"pagination_settings"),
+	Input('residTable',"sorting_settings")])
+def update_resid(selectedYrs,pagination_settings,sorting_settings):
+	if selectedYrs == None:
+		return
+	chtData = modelData.loc[modelData['Year'].isin(selectedYrs)]
+	nameDict = {
+	 	'actual': 'Act.',
+	 	'title':'Title',
+	 	'id': 'Player',
+	 	'overallPick': 'Pick',
+	 	'round': 'Rd'
+	}
+	chtData.rename(index=str, columns=nameDict, inplace=True)
+	residCols = ['Title','Year','Rd','Pick','Resid','% Resid','Act.']
+	trimmed=chtData[residCols]
+	if len(sorting_settings):
+		trimmed = trimmed.sort_values(
+			[col['column_id'] for col in sorting_settings],
+			ascending=[
+				col['direction'] == 'asc'
+				for col in sorting_settings
+			],
+			inplace=False
+		)
+	return trimmed.iloc[
+		pagination_settings['current_page']*pagination_settings['page_size']:
+		(pagination_settings['current_page'] + 1)*pagination_settings['page_size']
+	].to_dict('rows')
+
+@app.callback(
+	Output('residChartContainer', "children"),
+	[Input('residTable',"data"),
+	Input('residTable',"derived_virtual_selected_rows")])
+def updateResidGraph(rows,derived_virtual_selected_rows):
+	if derived_virtual_selected_rows is None:
+		derived_virtual_selected_rows = []
+	if rows is None:
+		return
+	else:
+		dff = pd.DataFrame(rows)
+
+	colors = []
+	for i in range(len(dff)):
+		if i in derived_virtual_selected_rows:
+			colors.append("#7FDBFF")
+		else:
+			colors.append("#0074D9")
+	return html.Div(
+		[
+			dcc.Graph(
+				id=column,
+				figure={
+					"data": [
+						{
+							"x": dff['Title'],
+							"y": dff[column],
+							"type": "bar",
+							"marker": {"color": colors},
+						}
+					],
+					"layout": {
+						"xaxis": {"automargin": True},
+						"yaxis": {"automargin": True},
+						"height": 250,
+						"margin": {"t":30,"l":10,"r":10},
+						"title": column
+					},
+				},
+			)
+			#for column in ["Act.","Resid","% Resid"]
+			for column in ["Resid","% Resid"]
+		]
+	)
 
 @app.callback(
 	dash.dependencies.Output('aggTable', 'data'),

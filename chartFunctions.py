@@ -184,7 +184,7 @@ def userCume(dictName, year, segment='id', month=1, day=1):
 								dictName[year][title]['box']['tim']])/1000000
 							label = title+': '+str(box)+' (Expert proj.)'
 						grossCume = grossCume + box
-						titleDict[pid].remove(title)
+						#titleDict[pid].remove(title)
 			cumeDict[pid][day] = [grossCume,label]
 
 	return cumeDict
